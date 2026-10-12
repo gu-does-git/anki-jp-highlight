@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name          Anki JP Highlight
 // @namespace     Violentmonkey Scripts
-// @version       0.3.4
-// @description   Destaca palavras japonesas conforme status do card no Anki.
+// @version       0.3.5
+// @description   Colors Japanese words by the status of their card in Anki.
 // @author        gu-does-git
 // @license       MIT
 // @match         *://*/*
@@ -18,8 +18,8 @@
 	"use strict";
 
 	const ANKI_URL = "http://127.0.0.1:8765";
-	// Campos de "palavra" dos note types JP em uso. Deve incluir o campo de cada
-	// deck; campo inexistente no note type simplesmente nao casa na busca.
+	// "Word" fields of the JP note types in use. Must include the field of every
+	// deck; a field missing from a note type simply never matches the search.
 	const FIELDS = ["Word", "Expression", "Jlab-Kanji", "Jlab-Lemma"];
 	const DECK_FILTER = "";
 	const STATUS_COLORS = {
@@ -29,22 +29,22 @@
 		suspended: "#8a8a8a",
 		buried: "#b06ab3",
 	};
-	// Precedencia quando a mesma palavra tem cards em mais de um deck.
+	// Precedence when the same word has cards in more than one deck.
 	const STATUS_PRIORITY = ["review", "learning", "new", "suspended", "buried"];
-	// Cor do texto quando a palavra pintada e selecionada com o mouse. O fundo da
-	// selecao e a propria cor do status; sem isso o browser usa a cor padrao de
-	// selecao, que briga com a cor do texto.
+	// Text color while a highlighted word is selected with the mouse. The selection
+	// background is the status color itself; without this the browser uses the default
+	// selection color, which clashes with the text color.
 	const SELECTION_TEXT_COLOR = "#0b0b0b";
-	// Analise morfologica por @libraz/suzume (Apache-2.0), vendorado no fim deste
-	// arquivo: da o limite de cada palavra e a forma de dicionario (baseForm), que
-	// e o que casa com o campo Word do Anki. O dicionario (.wasm, ~635KB) vem do CDN
-	// pinado e fica no cache HTTP do browser.
+	// Morphological analysis by @libraz/suzume (Apache-2.0), vendored at the end of
+	// this file: it gives each word boundary and the dictionary form (baseForm), which
+	// is what matches the Anki Word field. The dictionary (.wasm, ~635KB) comes from
+	// the pinned CDN and stays in the browser HTTP cache.
 	const SUZUME_VERSION = "0.9.14";
 	const SUZUME_WASM_URL = `https://cdn.jsdelivr.net/npm/@libraz/suzume@${SUZUME_VERSION}/dist/suzume.wasm`;
 	const WASM_TIMEOUT_MS = 60000;
-	// POS (maiusculo, como o suzume devolve) que nao viram palavra pintada:
-	// particula fica como esta; auxiliar/sufixo grudam no fim da palavra anterior
-	// (まし + た) e prefixo (お + 腹) no inicio da seguinte.
+	// POS (uppercase, as suzume returns them) that never become a highlighted word:
+	// a particle stays as it is; auxiliary/suffix glue to the end of the previous word
+	// (まし + た) and prefix (お + 腹) to the start of the next.
 	const SKIP_POS = new Set([
 		"PARTICLE",
 		"AUX",
@@ -55,8 +55,8 @@
 		"FILLER",
 	]);
 	const DEBOUNCE_MS = 150;
-	// Teto de CPU por passada: o analisador custa ~150ms por 1000 chars, entao a
-	// fila cede a thread e continua no proximo tick em vez de travar a pagina.
+	// CPU ceiling per pass: the analyzer costs ~150ms per 1000 chars, so the queue
+	// yields the thread and continues on the next tick instead of freezing the page.
 	const FRAME_BUDGET_MS = 50;
 	const BATCH_MAX = 50;
 	const CARDS_PER_WORD = 10;
@@ -65,11 +65,11 @@
 	const JP_REGEX = /[\u3040-\u309F\u30A0-\u30FF\u4E00-\u9FAF]/;
 	const MARK = "data-anki-word";
 	const MAX_WORD_CHARS = 16;
-	// POS que podem formar composto com o proximo (貴 + 様 -> 貴様).
+	// POS that can form a compound with the next one (貴 + 様 -> 貴様).
 	const JOINABLE_POS = new Set(["NOUN", "PRON"]);
-	// Ponte kana->kanji: o dicionario devolve a lemma em kana (こない -> くる) e o card
-	// pode estar no kanji (来る). O indice e montado das leituras dos proprios cards
-	// (notesInfo em blocos) e guardado no GM_setValue.
+	// kana->kanji bridge: the dictionary returns the lemma in kana (こない -> くる) while
+	// the card may be in kanji (来る). The index is built from the readings of the cards
+	// themselves (notesInfo in chunks) and stored in GM_setValue.
 	const READING_FIELDS = [
 		"Word Reading",
 		"ExpressionReading",
@@ -78,13 +78,13 @@
 	];
 	const READING_INDEX_KEY = "anki-jp-highlight:readings:v1";
 	const INDEX_CHUNK = 800;
-	// Deixa a pagina assentar antes de puxar a colecao para montar o indice.
+	// Let the page settle before pulling the collection to build the index.
 	const INDEX_BUILD_DELAY_MS = 5000;
 	const BRIDGE_MAX = 4;
 	const KANA_ONLY_REGEX = /^[\u3040-\u309Fー]+$/;
-	// Radical de verbo isolado o suzume le como substantivo (食べ[NOUN], 見[NOUN]).
-	// Se nenhuma chave casar, tentamos a forma de dicionario: + る (ichidan) e a
-	// kana da linha i/a mapeada para a linha u (godan: 会い -> 会う, 買わ -> 買う).
+	// A verb stem read in isolation comes back as a noun from suzume (食べ[NOUN], 見[NOUN]).
+	// When no key matches, we try the dictionary form: + る (ichidan) and the i/a-row
+	// kana mapped to the u-row (godan: 会い -> 会う, 買わ -> 買う).
 	const KANA_TO_U = {
 		い: "う",
 		き: "く",
@@ -108,8 +108,8 @@
 	};
 	const KANA_TAIL_REGEX = /[\u3041-\u3096ー]$/;
 	const KANJI_TAIL_REGEX = /[\u4E00-\u9FFF々]$/;
-	// Cache em disco (GM_setValue) expira por dia: a primeira pagina do dia ja abre
-	// sem request para tudo que voce ja consultou antes.
+	// On-disk cache (GM_setValue) expires daily: the first page of the day already
+	// opens with no request for everything you queried before.
 	const CACHE_KEY = "anki-jp-highlight:cache:v2";
 	const CACHE_SAVE_MS = 2000;
 	const CACHE_MAX_ENTRIES = 30000;
@@ -121,9 +121,9 @@
 		"NOSCRIPT",
 		"SELECT",
 	];
-	// Fim de um run de texto inline: quebra a analise aqui (celula, paragrafo...).
-	// BR fica FORA de proposito: quebra de linha nao separa palavra, e cortar o run
-	// ali isola radical (食べ + <br> + 行く -> 食[NOUN] e nada pinta).
+	// End of an inline text run: analysis breaks here (cell, paragraph...).
+	// BR stays OUT on purpose: a line break does not separate words, and cutting the
+	// run there isolates a stem (食べ + <br> + 行く -> 食[NOUN] and nothing is painted).
 	const BLOCK_TAGS = new Set([
 		"ADDRESS",
 		"ARTICLE",
@@ -169,16 +169,16 @@
 		"UL",
 	]);
 
-	const cache = new Map(); // forma de dicionario -> status | "" (sem card)
-	let done = new WeakMap(); // elemento -> textContent processado
+	const cache = new Map(); // dictionary form -> status | "" (no card)
+	let done = new WeakMap(); // element -> processed textContent
 	const dirty = new Set();
-	const emptyProcessed = new WeakSet(); // elementos sem nada pintavel (evita re-analise)
-	const waiting = new Set(); // elementos com palavras ainda nao resolvidas
+	const emptyProcessed = new WeakSet(); // elements with nothing paintable (avoids re-analysis)
+	const waiting = new Set(); // elements with words not resolved yet
 	const queueWords = new Set();
-	const wordKeys = new Map(); // chave primaria -> todas as chaves da unidade
+	const wordKeys = new Map(); // primary key -> every key of the unit
 
 	let engine = null;
-	let readingIndex = new Map(); // kana -> [kanji...] das leituras dos cards
+	let readingIndex = new Map(); // kana -> [kanji...] from the card readings
 	let indexBuilding = false;
 	let debounceTimer = null;
 	let batchRunning = false;
@@ -204,16 +204,16 @@
 		(document.head ?? document.documentElement).append(style);
 	}
 
-	// Chaves de consulta de uma unidade: a forma de dicionario quando o morfema e
-	// verbo/adjetivo (食べました -> 食べる), senao o proprio texto lido; a outra
-	// forma entra como chave secundaria (お腹 -> 腹, 食べました -> 食べる).
+	// Query keys of a unit: the dictionary form when the morpheme is a verb/adjective
+	// (食べました -> 食べる), otherwise the text as read; the other form goes in as a
+	// secondary key (お腹 -> 腹, 食べました -> 食べる).
 	function keysFor(unit) {
 		const inflected = unit.pos === "VERB" || unit.pos === "ADJ";
 		const primary = inflected && unit.lemma ? unit.lemma : unit.surface;
 		const keys =
 			primary === unit.lemma || !unit.lemma ? [primary] : [primary, unit.lemma];
-		// Ponte kana->kanji: a forma lida so em kana pode ter o card no kanji (こない
-		// -> くる -> 来る); os candidatos vem das leituras dos proprios cards.
+		// kana->kanji bridge: a form read only in kana may have its card in kanji (こない
+		// -> くる -> 来る); the candidates come from the readings of the cards themselves.
 		if (readingIndex.size && KANA_ONLY_REGEX.test(primary)) {
 			for (const word of readingIndex.get(primary) ?? []) {
 				if (!keys.includes(word)) keys.push(word);
@@ -266,7 +266,7 @@
 		});
 	}
 
-	// queue do Anki: -1 suspenso, -2/-3 enterrado, 0 novo, 1/3 aprendendo, 2 revisao.
+	// Anki queue: -1 suspended, -2/-3 buried, 0 new, 1/3 learning, 2 review.
 	function statusFromQueue(queue) {
 		if (queue === 0) return "new";
 		if (queue === 1 || queue === 3) return "learning";
@@ -338,7 +338,7 @@
 		readingIndex = new Map(Object.entries(entries));
 	}
 
-	// Sempre aproveita o indice guardado (mesmo de outro dia); devolve se e de hoje.
+	// Always reuse the stored index (even from another day); returns whether it is today's.
 	function loadReadingIndex() {
 		try {
 			const raw = GM_getValue(READING_INDEX_KEY, "");
@@ -361,8 +361,8 @@
 		}
 	}
 
-	// Monta kana->kanji a partir das leituras dos proprios cards, em blocos, cedendo a
-	// thread entre eles (sao ~77MB de notesInfo na colecao inteira).
+	// Builds kana->kanji from the readings of the cards themselves, in chunks, yielding
+	// the thread in between (~77MB of notesInfo for the whole collection).
 	async function buildReadingIndex() {
 		if (indexBuilding) return;
 		indexBuilding = true;
@@ -437,8 +437,8 @@
 						})),
 					)
 				: [];
-			// O status vale para todas as chaves da unidade: a forma lida e a forma de
-			// dicionario compartilham o card.
+			// The status holds for every key of the unit: the read form and the dictionary
+			// form share the card.
 			withIds.forEach((word, index) => {
 				const status = statusFromCards(infos[index]);
 				for (const key of wordKeys.get(word) ?? [word]) cache.set(key, status);
@@ -492,8 +492,8 @@
 			span.replaceWith(document.createTextNode(span.textContent));
 	}
 
-	// Auxiliar (auxiliar de tempo/negacao) e sufixo (さん, たち) pertencem a palavra
-	// anterior; prefixo (お, ご) pertence a seguinte.
+	// An auxiliary (tense/negation helper) and a suffix (さん, たち) belong to the
+	// previous word; a prefix (お, ご) belongs to the next one.
 	function isAttaching(morpheme) {
 		return (
 			morpheme.extendedPos?.startsWith("AUX") ||
@@ -503,9 +503,9 @@
 		);
 	}
 
-	// Morfemas viram unidades pintaveis: auxiliar/sufixo entram no fim da palavra
-	// anterior (まし + た), prefixo entra no inicio da seguinte (お + 腹), particula
-	// fica de fora.
+	// Morphemes become paintable units: auxiliary/suffix join the end of the previous
+	// word (まし + た), prefix joins the start of the next (お + 腹), a particle stays
+	// out.
 	function toUnits(text) {
 		const { morphemes } = engine.analyzeWithNormalizedText(text);
 		const units = [];
@@ -514,7 +514,7 @@
 			const start = morpheme.startUtf16;
 			const end = morpheme.endUtf16;
 			const raw = text.slice(start, end);
-			// Normalizacao do dicionario pode deslocar offsets (ヴ, largura, caixa).
+			// Dictionary normalization can shift offsets (ヴ, width, case).
 			if (raw !== morpheme.surface) continue;
 			const previous = units.at(-1);
 			if (isAttaching(morpheme)) {
@@ -526,8 +526,8 @@
 				continue;
 			}
 			if (SKIP_POS.has(morpheme.pos)) {
-				// Particula solta colada no fim (食|べ, 買|わ): a kana diz a linha da
-				// conjugacao e serve de pista para a forma de dicionario.
+				// A lone particle glued to the end (食|べ, 買|わ): the kana tells the conjugation
+				// row and hints at the dictionary form.
 				if (
 					previous &&
 					previous.end === start &&
@@ -552,9 +552,9 @@
 		return units;
 	}
 
-	// Candidatos de forma de dicionario para um radical (食べ -> 食べる, 会い ->
-	// 会う) e para o kanji + kana que o dicionario separa (買|わ -> 買う). O end
-	// acompanha porque o recorte pode incluir a kana do radical.
+	// Dictionary-form candidates for a stem (食べ -> 食べる, 会い -> 会う) and for the
+	// kanji + kana the dictionary splits (買|わ -> 買う). `end` follows along because the
+	// span may include the kana of the stem.
 	function stemCandidates(unit) {
 		const candidates = [];
 		const push = (key, end) => candidates.push({ key, end });
@@ -574,8 +574,8 @@
 		return candidates;
 	}
 
-	// Resolve as unidades de um texto corrido: devolve os recortes a pintar
-	// (start/end/status) e agenda a consulta do que ainda nao esta em cache.
+	// Resolves the units of a run of text: returns the spans to paint (start/end/status)
+	// and queues the lookup of what is not cached yet.
 	function resolveUnits(text, units, element) {
 		const paintings = [];
 		let coveredUntil = 0;
@@ -595,9 +595,9 @@
 			}
 			if (pending) queueWord(keys, element);
 			let end = unit.end;
-			// Composto que o dicionario separa (貴 + 様): quando alguma metade nao tem
-			// card ou nao foi consultada, tenta a juncao com o proximo substantivo —
-			// o pedaco solto costuma casar com card de outro deck (nome proprio).
+			// A compound the dictionary splits (貴 + 様): when either half has no card, or was
+			// not queried yet, try joining it with the next noun - the loose piece often matches
+			// a card from another deck (proper noun).
 			const next = units[index + 1];
 			if (
 				next &&
@@ -616,8 +616,8 @@
 					}
 				}
 			}
-			// Radical que o dicionario leu como substantivo (食べ, 見, 会い) e que nao
-			// casou: tenta a forma de dicionario antes de desistir.
+			// A stem the dictionary read as a noun (食べ, 見, 会い) that did not match: try the
+			// dictionary form before giving up.
 			if (!status && !pending) {
 				const stems = stemCandidates(unit);
 				let stemsPending = false;
@@ -644,8 +644,8 @@
 		return paintings;
 	}
 
-	// Envolve os recortes de um unico text node em spans (o recorte pode ter vindo
-	// de um run que atravessa varios nodes).
+	// Wraps the slices of a single text node in spans (the slice may come from a run
+	// that crosses several nodes).
 	function wrapSlices(node, list) {
 		const text = node.nodeValue;
 		list.sort((left, right) => left.start - right.start);
@@ -668,9 +668,9 @@
 		node.replaceWith(fragment);
 	}
 
-	// Um run e texto solto + spans inline consecutivos da pagina; analisa tudo como
-	// um texto so (pagina que corta a palavra em spans: <span>買わ</span>ない) e
-	// devolve os recortes para os nodes de origem.
+	// A run is loose text + consecutive inline spans of the page; it is analyzed as one
+	// text (a page that cuts the word into spans: <span>買わ</span>ない) and returns the
+	// slices for the source nodes.
 	function paintRun(nodes, element) {
 		if (!nodes.length) return false;
 		let text = "";
@@ -703,9 +703,9 @@
 		return perNode.size > 0;
 	}
 
-	// Percorre o conteudo inline acumulando texto em state.run. Bloco no meio —
-	// mesmo dentro de um inline (a > div, em > div) — fecha o run e vira um
-	// container proprio (antes o texto desses blocos era simplesmente ignorado).
+	// Walks the inline content collecting text in state.run. A block in the middle -
+	// even inside an inline (a > div, em > div) - closes the run and becomes its own
+	// container (before, the text of those blocks was simply ignored).
 	function walkInline(element, force, state) {
 		for (const child of element.childNodes) {
 			if (child.nodeType === Node.TEXT_NODE) {
@@ -728,9 +728,9 @@
 		if (!element || !element.isConnected || isSkipped(element)) return false;
 		if (!engine) return false;
 		const text = element.textContent;
-		// So pula quando nada mudou E a marcacao sobreviveu la dentro (ou ja sabemos
-		// que ali nao ha nada pintavel): a pagina pode ter trocado a subarvore
-		// inteira mantendo o mesmo texto (re-render do reader).
+		// Skips only when nothing changed AND the markup survived in there (or we already
+		// know there is nothing paintable): the page may have swapped the whole subtree
+		// while keeping the same text (reader re-render).
 		if (
 			!force &&
 			done.get(element) === text &&
@@ -802,7 +802,7 @@
 		});
 	}
 
-	GM_registerMenuCommand("Recarregar status do Anki", () => {
+	GM_registerMenuCommand("Reload Anki status", () => {
 		cache.clear();
 		GM_setValue(CACHE_KEY, "");
 		done = new WeakMap();
@@ -810,7 +810,7 @@
 		process();
 	});
 
-	GM_registerMenuCommand("Reconstruir indice kana->kanji", () => {
+	GM_registerMenuCommand("Rebuild kana->kanji index", () => {
 		buildReadingIndex();
 	});
 
@@ -825,11 +825,11 @@
 	startEngine();
 
 	// ---------------------------------------------------------------------------
-	// Vendorado: @libraz/suzume 0.9.14 (Apache-2.0), bundle CJS minificado com
-	// `import.meta.url` trocado por "about:blank" (o wasm vem de wasmPath).
-	// Regenerar: bun build --minify --target=browser --format=cjs \
-	//   <suzume>/dist/index.js --outfile=bundle.js  e trocar import.meta.url.
-	// Licenca: https://github.com/libraz/suzume/blob/main/LICENSE (Apache-2.0).
+	// Vendored: @libraz/suzume 0.9.14 (Apache-2.0), CJS bundle minified with
+	// `import.meta.url` swapped for "about:blank" (the wasm comes from wasmPath).
+	// Regenerate: bun build --minify --target=browser --format=cjs \
+	//   <suzume>/dist/index.js --outfile=bundle.js  and swap import.meta.url.
+	// License: https://github.com/libraz/suzume/blob/main/LICENSE (Apache-2.0).
 	/* eslint-disable */
 	const suzumeModule = { exports: {} };
 	// prettier-ignore
