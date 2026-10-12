@@ -54,8 +54,8 @@ dictionary of `@libraz/suzume`, version pinned in `SUZUME_VERSION`).
 
 - **Status colors** in `STATUS_COLORS`. The same word in more than one deck resolves by
   `STATUS_PRIORITY` (`review` > `learning` > `new` > `suspended` > `buried`).
-- **Manager menu**: _Recarregar status do Anki_ clears the daily cache and queries again (use it
-  after reviewing), and _Reconstruir indice kana->kanji_ rebuilds the reading index.
+- **Manager menu**: _Reload Anki status_ clears the daily cache and queries again (use it after
+  reviewing), and _Rebuild kana->kanji index_ rebuilds the reading index.
 - **Cost**: each word's status is cached for the day (`CACHE_KEY`, `GM_setValue`) — a second visit
   to the same word makes no request. The reading index is built once a day, `INDEX_BUILD_DELAY_MS`
   after load, in chunks of `INDEX_CHUNK` notes.
