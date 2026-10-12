@@ -5,12 +5,9 @@
 Pinta as palavras japonesas de qualquer página com a cor do status do card no Anki.
 
 [![release][release-image]][release-url]
-[![GreasyFork][greasyfork-image]][greasyfork-url]
 
 [release-image]: https://img.shields.io/github/v/release/<usuario>/anki-jp-highlight?color=blue
 [release-url]: https://github.com/<usuario>/anki-jp-highlight/releases/latest
-[greasyfork-image]: https://img.shields.io/badge/Instalar%20no-Greasy%20Fork-960000
-[greasyfork-url]: https://greasyfork.org/scripts/<id>-anki-jp-highlight
 
 </div>
 
@@ -35,8 +32,7 @@ um índice kana→kanji montado das leituras dos próprios cards permite pintar 
 
 ### Instalar
 
-1. Instale pelo [Greasy Fork][greasyfork-url], ou
-2. instale direto deste repositório:
+Com o gerenciador instalado, abra a URL abaixo (ou cole o conteúdo em _Criar novo script_):
 
 ```text
 https://raw.githubusercontent.com/<usuario>/anki-jp-highlight/main/anki-jp-highlight.user.js
