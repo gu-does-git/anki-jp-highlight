@@ -4,6 +4,7 @@
 // @version       0.3.4
 // @description   Destaca palavras japonesas conforme status do card no Anki.
 // @author        gu-does-git
+// @license       MIT
 // @match         *://*/*
 // @grant         GM_xmlhttpRequest
 // @grant         GM_registerMenuCommand

@@ -2,74 +2,85 @@
 
 <div align="center">
 
-Pinta as palavras japonesas de qualquer página com a cor do status do card no Anki.
+Colors every Japanese word on any web page with the status color of its card in Anki.
 
+[![license][license-image]][license-url]
 [![release][release-image]][release-url]
+[![install][install-image]][install-url]
 
+[license-image]: https://img.shields.io/github/license/<usuario>/anki-jp-highlight?color=red
+[license-url]: https://github.com/<usuario>/anki-jp-highlight/blob/main/LICENSE
 [release-image]: https://img.shields.io/github/v/release/<usuario>/anki-jp-highlight?color=blue
 [release-url]: https://github.com/<usuario>/anki-jp-highlight/releases/latest
+[install-image]: https://img.shields.io/badge/install-Tampermonkey%20%7C%20Violentmonkey-4caf7d?style=flat-square&logo=tampermonkey
+[install-url]: https://raw.githubusercontent.com/<usuario>/anki-jp-highlight/main/anki-jp-highlight.user.js
 
 </div>
 
-## O que faz
+## What it does
 
-Cada palavra japonesa ganha a cor do status do card correspondente na sua coleção —
-`new`, `learning`, `review`, `suspended`, `buried` — com underline, como no jiten reader. Palavra
-sem card fica como texto puro. Funciona em qualquer página (`*://*/*`): notícia, mokuro, legenda,
-artigo.
+Every Japanese word gets the status color of its card — `new`, `learning`, `review`, `suspended`,
+`buried` — with an underline, like the jiten reader. Words without a card stay plain text. Works on
+any page (`*://*/*`): news, mokuro, subtitles, articles.
 
-O corte das palavras é morfológico (`食べました` pinta `食べる`, `食べに行く` pinta `食べ` e `行く`), e
-um índice kana→kanji montado das leituras dos próprios cards permite pintar `こない` como `来る`.
+Word boundaries come from a morphological analyzer, so `食べました` highlights `食べる` and
+`食べに行く` highlights `食べ` and `行く`. A kana→kanji index built from the readings of your own
+cards is what lets `こない` highlight as `来る`.
 
-## Instalação
+## Install
 
-### Requisitos
+### Requirements
 
-- **Anki desktop** aberto, com o add-on [AnkiConnect](https://ankiweb.net/shared/info/2055492159)
-  escutando em `127.0.0.1:8765`.
-- Um gerenciador de userscripts — [Tampermonkey](https://www.tampermonkey.net/) ou
+- **Anki desktop** running, with the [AnkiConnect](https://ankiweb.net/shared/info/2055492159)
+  add-on listening on `127.0.0.1:8765`.
+- A userscript manager — [Tampermonkey](https://www.tampermonkey.net/) or
   [Violentmonkey](https://violentmonkey.github.io/).
 
-### Instalar
+### Installing
 
-Com o gerenciador instalado, abra a URL abaixo (ou cole o conteúdo em _Criar novo script_):
+With the manager installed, open the URL below (or paste the content into _Create a new script_):
 
 ```text
 https://raw.githubusercontent.com/<usuario>/anki-jp-highlight/main/anki-jp-highlight.user.js
 ```
 
-O gerenciador atualiza sozinho a cada bump de `@version`.
+The manager updates itself on every `@version` bump.
 
-Se o AnkiConnect recusar a origem da página, adicione essa origin em `webCorsOriginList` na config
-dele. O script declara `@connect 127.0.0.1` (AnkiConnect) e `@connect cdn.jsdelivr.net` (dicionário
-`.wasm` do `@libraz/suzume`, versão pinada em `SUZUME_VERSION`).
+If AnkiConnect rejects the page origin, add that origin to `webCorsOriginList` in its config. The
+script declares `@connect 127.0.0.1` (AnkiConnect) and `@connect cdn.jsdelivr.net` (the `.wasm`
+dictionary of `@libraz/suzume`, version pinned in `SUZUME_VERSION`).
 
-## Uso
+## Usage
 
-- **Cores por status** em `STATUS_COLORS`. Mesma palavra em decks diferentes resolve por
+- **Status colors** in `STATUS_COLORS`. The same word in more than one deck resolves by
   `STATUS_PRIORITY` (`review` > `learning` > `new` > `suspended` > `buried`).
-- **Menu do gerenciador**: _Recarregar status do Anki_ (limpa o cache do dia e re-consulta, depois
-  de estudar) e _Reconstruir índice kana->kanji_.
-- **Custo**: o status de cada palavra fica em cache diário (`CACHE_KEY`, `GM_setValue`) — segunda
-  visita à mesma palavra não faz request. O índice de leituras é construído uma vez por dia,
-  `INDEX_BUILD_DELAY_MS` após o load, em blocos de `INDEX_CHUNK` notas.
-- **Ajustes** são constantes no topo do arquivo: `FIELDS`, `READING_FIELDS`, `STATUS_COLORS`,
-  `DECK_FILTER`, `ANKI_URL`.
+- **Manager menu**: _Recarregar status do Anki_ clears the daily cache and queries again (use it
+  after reviewing), and _Reconstruir indice kana->kanji_ rebuilds the reading index.
+- **Cost**: each word's status is cached for the day (`CACHE_KEY`, `GM_setValue`) — a second visit
+  to the same word makes no request. The reading index is built once a day, `INDEX_BUILD_DELAY_MS`
+  after load, in chunks of `INDEX_CHUNK` notes.
+- **Tuning** is done with the constants at the top of the file: `FIELDS`, `READING_FIELDS`,
+  `STATUS_COLORS`, `DECK_FILTER`, `ANKI_URL`.
 
-## Desenvolvimento
+## Development
 
 ```sh
 bun install     # dev deps + hooks
-bun run lint    # eslint (valida o bloco ==UserScript==)
+bun run lint    # eslint (validates the ==UserScript== block)
 bun run format  # prettier
 bun run secrets # secretlint
 ```
 
-Para testar: "Criar novo script" na extensão e colar o conteúdo, ou instalar pela URL acima — a
-extensão só aplica na página depois de recarregar a aba.
+To test: _Create a new script_ in the manager and paste the content, or install from the URL above —
+the extension only applies changes after you reload the tab.
 
-## Créditos
+## Credits
 
-- Análise morfológica: [`@libraz/suzume`](https://github.com/libraz/suzume) (Apache-2.0), vendorado
-  no fim do arquivo como bundle minificado.
-- Dicionário `.wasm` servido pelo [jsDelivr](https://www.jsdelivr.com/), versão pinada.
+- Morphological analysis: [`@libraz/suzume`](https://github.com/libraz/suzume) (Apache-2.0),
+  vendored at the end of the file as a minified bundle.
+- `.wasm` dictionary served by [jsDelivr](https://www.jsdelivr.com/), pinned version.
+
+## License
+
+MIT — see [`LICENSE`](./LICENSE). The vendored `suzume` remains under Apache-2.0 (copy in
+[`THIRD-PARTY-NOTICES.txt`](./THIRD-PARTY-NOTICES.txt)).
