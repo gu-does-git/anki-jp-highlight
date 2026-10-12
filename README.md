@@ -62,18 +62,6 @@ dictionary of `@libraz/suzume`, version pinned in `SUZUME_VERSION`).
 - **Tuning** is done with the constants at the top of the file: `FIELDS`, `READING_FIELDS`,
   `STATUS_COLORS`, `DECK_FILTER`, `ANKI_URL`.
 
-## Development
-
-```sh
-bun install     # dev deps + hooks
-bun run lint    # eslint (validates the ==UserScript== block)
-bun run format  # prettier
-bun run secrets # secretlint
-```
-
-To test: _Create a new script_ in the manager and paste the content, or install from the URL above —
-the extension only applies changes after you reload the tab.
-
 ## Credits
 
 - Morphological analysis: [`@libraz/suzume`](https://github.com/libraz/suzume) (Apache-2.0),
