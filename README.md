@@ -8,12 +8,12 @@ Colors every Japanese word on any web page with the status color of its card in 
 [![release][release-image]][release-url]
 [![install][install-image]][install-url]
 
-[license-image]: https://img.shields.io/github/license/<usuario>/anki-jp-highlight?color=red
-[license-url]: https://github.com/<usuario>/anki-jp-highlight/blob/main/LICENSE
-[release-image]: https://img.shields.io/github/v/release/<usuario>/anki-jp-highlight?color=blue
-[release-url]: https://github.com/<usuario>/anki-jp-highlight/releases/latest
+[license-image]: https://img.shields.io/github/license/gu-does-git/anki-jp-highlight?color=red
+[license-url]: https://github.com/gu-does-git/anki-jp-highlight/blob/main/LICENSE
+[release-image]: https://img.shields.io/github/v/release/gu-does-git/anki-jp-highlight?color=blue
+[release-url]: https://github.com/gu-does-git/anki-jp-highlight/releases/latest
 [install-image]: https://img.shields.io/badge/install-Tampermonkey%20%7C%20Violentmonkey-4caf7d?style=flat-square&logo=tampermonkey
-[install-url]: https://raw.githubusercontent.com/<usuario>/anki-jp-highlight/main/anki-jp-highlight.user.js
+[install-url]: https://raw.githubusercontent.com/gu-does-git/anki-jp-highlight/main/anki-jp-highlight.user.js
 
 </div>
 
@@ -41,7 +41,7 @@ cards is what lets `こない` highlight as `来る`.
 With the manager installed, open the URL below (or paste the content into _Create a new script_):
 
 ```text
-https://raw.githubusercontent.com/<usuario>/anki-jp-highlight/main/anki-jp-highlight.user.js
+https://raw.githubusercontent.com/gu-does-git/anki-jp-highlight/main/anki-jp-highlight.user.js
 ```
 
 The manager updates itself on every `@version` bump.
