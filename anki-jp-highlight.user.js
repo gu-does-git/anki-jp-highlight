@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name          Anki JP Highlight
 // @namespace     Violentmonkey Scripts
-// @version       0.3.5
+// @version       0.3.6
 // @description   Colors Japanese words by the status of their card in Anki.
 // @author        gu-does-git
 // @license       MIT
@@ -183,12 +183,12 @@
 	let debounceTimer = null;
 	let batchRunning = false;
 	let backoffUntil = 0;
-	let warned = false;
+	const warned = new Set();
 	let saveTimer = null;
 
 	function warnOnce(message, error) {
-		if (warned) return;
-		warned = true;
+		if (warned.has(message)) return;
+		warned.add(message);
 		console.warn(`[anki-jp-highlight] ${message}`, error ?? "");
 	}
 
@@ -260,8 +260,8 @@
 						reject(error);
 					}
 				},
-				onerror: () => reject(new Error("AnkiConnect inacessivel")),
-				ontimeout: () => reject(new Error("AnkiConnect timeout")),
+				onerror: () => reject(new Error("AnkiConnect is not reachable")),
+				ontimeout: () => reject(new Error("AnkiConnect request timed out")),
 			});
 		});
 	}
@@ -306,7 +306,7 @@
 				cache.set(word, status);
 			}
 		} catch (error) {
-			warnOnce("cache persistente ilegivel", error);
+			warnOnce("stored status cache is unreadable; starting empty", error);
 		}
 	}
 
@@ -321,7 +321,7 @@
 					JSON.stringify({ day: dayKey(), entries: Object.fromEntries(cache) }),
 				);
 			} catch (error) {
-				warnOnce("falha ao gravar o cache persistente", error);
+				warnOnce("could not persist the status cache", error);
 			}
 		}, CACHE_SAVE_MS);
 	}
@@ -347,7 +347,7 @@
 			fillReadingIndex(saved.readings ?? {});
 			return saved.day === dayKey();
 		} catch (error) {
-			warnOnce("indice kana->kanji ilegivel", error);
+			warnOnce("stored kana->kanji index is unreadable; will rebuild", error);
 			return false;
 		}
 	}
@@ -357,7 +357,7 @@
 		try {
 			GM_setValue(READING_INDEX_KEY, JSON.stringify(payload));
 		} catch (error) {
-			warnOnce("falha ao gravar o indice kana->kanji", error);
+			warnOnce("could not persist the kana->kanji index", error);
 		}
 	}
 
@@ -398,7 +398,7 @@
 			dirty.add(document.body);
 			process();
 		} catch (error) {
-			warnOnce("falha ao montar o indice kana->kanji", error);
+			warnOnce("could not build the kana->kanji index", error);
 		}
 		indexBuilding = false;
 	}
@@ -450,7 +450,10 @@
 			for (const word of words) wordKeys.delete(word);
 			savePersistentCache();
 		} catch (error) {
-			warnOnce("falha na consulta, pausando", error);
+			warnOnce(
+				`AnkiConnect query failed; backing off ${BACKOFF_MS / 1000}s`,
+				error,
+			);
 			backoffUntil = Date.now() + BACKOFF_MS;
 			for (const word of words) queueWords.add(word);
 			batchRunning = false;
@@ -781,7 +784,9 @@
 			timeout: WASM_TIMEOUT_MS,
 			onload: (response) => {
 				if (response.status !== 200 || !response.response) {
-					warnOnce(`wasm do dicionario nao carregou (HTTP ${response.status})`);
+					warnOnce(
+						`suzume dictionary download failed (HTTP ${response.status})`,
+					);
 					return;
 				}
 				const blobUrl = URL.createObjectURL(
@@ -795,10 +800,16 @@
 						dirty.add(document.body);
 						process();
 					})
-					.catch((error) => warnOnce("suzume nao iniciou", error));
+					.catch((error) =>
+						warnOnce(
+							"suzume engine failed to start; nothing is highlighted until a reload",
+							error,
+						),
+					);
 			},
-			onerror: () => warnOnce("falha ao baixar o dicionario do suzume"),
-			ontimeout: () => warnOnce("timeout ao baixar o dicionario do suzume"),
+			onerror: () =>
+				warnOnce("suzume dictionary download failed (network error)"),
+			ontimeout: () => warnOnce("suzume dictionary download timed out"),
 		});
 	}
 
